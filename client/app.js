@@ -337,24 +337,29 @@
       .replace(/"/g, '&quot;');
   }
 
-  function renderTowerTable() {
-    const body = $('towerTableBody');
-    if (!body) return;
+  function isControlRoom() {
+    return document.body.classList.contains('cr-page');
+  }
 
-    if (!towers.length) {
-      body.innerHTML = `
-        <tr><td colspan="15" class="muted" style="padding:1rem;white-space:normal">
-          No tower online yet.<br><br>
-          1. Start server on PC: <code>cd server && npm start</code><br>
-          2. On Pi: set API_URL in /etc/scs-agent.env<br>
-          3. <code>sudo systemctl restart scs-agent</code>
-        </td></tr>`;
-      return;
+  function towerRowHtml(t) {
+    if (isControlRoom()) {
+      const st = t.online ? 'On' : 'Off';
+      const riskShort =
+        t.risk === 'Battery Warning' ? 'Bat' : t.risk === 'Evacuation' ? 'EVAC' : t.risk.slice(0, 6);
+      return `
+      <tr class="${t.id === selectedId ? 'active' : ''}" data-id="${esc(t.id)}">
+        <td class="cell-id">${esc(t.id)}</td>
+        <td>${esc(t.name)}</td>
+        <td><span class="status-dot ${t.online ? 'on' : 'off'}"></span>${st}</td>
+        <td><span class="risk-pill risk ${riskClass(t.risk)}">${esc(riskShort)}</span></td>
+        <td><b>${t.battery}%</b></td>
+        <td>${esc(t.text)}</td>
+        <td class="cr-gps">${esc(t.gps)}</td>
+        <td>${esc(t.lastSeen)}</td>
+        <td class="cell-actions"><button type="button" class="btn btn-ghost btn-row-raw" data-id="${esc(t.id)}">Raw</button></td>
+      </tr>`;
     }
-
-    body.innerHTML = towers
-      .map(
-        (t) => `
+    return `
       <tr class="${t.id === selectedId ? 'active' : ''}" data-id="${esc(t.id)}">
         <td class="cell-id">${esc(t.id)}</td>
         <td>${esc(t.name)}</td>
@@ -371,9 +376,23 @@
         <td>${t.camera ? 'On' : 'Off'}</td>
         <td>${esc(t.lastSeen)}</td>
         <td class="cell-actions"><button type="button" class="btn btn-ghost btn-row-raw" data-id="${esc(t.id)}">Raw</button></td>
-      </tr>`
-      )
-      .join('');
+      </tr>`;
+  }
+
+  function renderTowerTable() {
+    const body = $('towerTableBody');
+    if (!body) return;
+    const cols = isControlRoom() ? 9 : 15;
+
+    if (!towers.length) {
+      body.innerHTML = `
+        <tr><td colspan="${cols}" class="muted" style="padding:0.75rem;white-space:normal;font-size:11px">
+          No tower online yet. Start server + Pi/simulator.
+        </td></tr>`;
+      return;
+    }
+
+    body.innerHTML = towers.map((t) => towerRowHtml(t)).join('');
 
     if (!body.dataset.rawBound) {
       body.dataset.rawBound = '1';

@@ -3,22 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SCS Control</title>
+  <title>SCS Emergency Control — Life Safety</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body class="dashboard-page">
   <header class="topbar">
     <div class="topbar-brand">
-      <h1>SCS Control</h1>
-      <span class="topbar-sub">Safer Community Emergency</span>
+      <div>
+        <h1>SCS Emergency Control</h1>
+        <span class="topbar-sub">Life Safety · Remote Tower Command</span>
+      </div>
+      <span class="life-safety-badge">Life Safety</span>
     </div>
     <div class="topbar-status">
       <span class="chip" id="connBadge">Connecting…</span>
       <span class="chip chip-muted" id="operatorBadge">Operator</span>
     </div>
     <div class="topbar-actions">
-      <button type="button" class="btn btn-primary" id="btnMapView">Map view</button>
+      <a href="/control-room.html" class="btn btn-primary" style="text-decoration:none">Control room</a>
+      <button type="button" class="btn btn-ghost" id="btnMapView">Map</button>
       <a href="/debug.html" class="btn btn-ghost">Debug</a>
       <button type="button" class="btn btn-ghost" id="btnLogout">Sign out</button>
       <button type="button" class="btn btn-danger" id="btnGlobalEvac">Global evacuation</button>
