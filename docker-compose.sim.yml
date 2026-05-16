@@ -1,0 +1,16 @@
+# Dummy tower simulator — server runs on your PC separately (npm start in server/)
+#
+#   docker compose -f docker-compose.sim.yml up
+#
+# Windows/Mac: API_URL uses host.docker.internal to reach localhost:3001
+
+services:
+  tower-sim:
+    build: ./simulator
+    container_name: scs-tower-sim
+    restart: unless-stopped
+    environment:
+      API_URL: http://host.docker.internal:3001
+      TELEMETRY_INTERVAL: "15"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

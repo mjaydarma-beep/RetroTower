@@ -23,10 +23,23 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_float(key: str, default: float | None = None) -> float | None:
+    raw = _env(key)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 @dataclass
 class Config:
     tower_id: str
     tower_name: str
+    tower_lat: float | None
+    tower_lng: float | None
+    tower_location: str
     api_url: str
     device_key: str
     mqtt_host: str
@@ -61,6 +74,9 @@ class Config:
         return cls(
             tower_id=tower_id,
             tower_name=_env("TOWER_NAME", tower_id),
+            tower_lat=_env_float("TOWER_LAT"),
+            tower_lng=_env_float("TOWER_LNG"),
+            tower_location=_env("TOWER_LOCATION"),
             api_url=_env("API_URL", "http://127.0.0.1:3001").rstrip("/"),
             device_key=_env("DEVICE_KEY", "change-me"),
             mqtt_host=_env("MQTT_HOST", "127.0.0.1"),

@@ -3,101 +3,240 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SCS Server Debug</title>
+  <title>SCS Debug</title>
   <link rel="stylesheet" href="styles.css" />
-  <style>
-    .debug-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-  .debug-header h1 { margin: 0; font-size: 1.4rem; }
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
-  .metrics .card { padding: 12px; }
-  .metrics h2 { margin: 4px 0 0; font-size: 1.5rem; }
-  .ok { color: #4ade80; }
-  .bad { color: #f87171; }
-  .warn { color: #fbbf24; }
-  .tower-debug { margin-bottom: 14px; }
-  .tower-debug summary { cursor: pointer; font-weight: bold; padding: 8px 0; }
-  .tower-debug pre { background: #020617; padding: 12px; border-radius: 10px; overflow: auto; font-size: 12px; max-height: 320px; }
-  table.conn { width: 100%; font-size: 13px; border-collapse: collapse; }
-  table.conn td, table.conn th { border-bottom: 1px solid #334155; padding: 8px; text-align: left; }
-  </style>
 </head>
-<body>
-  <div class="container">
-    <div class="debug-header">
-      <div>
-        <h1>SCS Control Center — Debug</h1>
-        <p class="muted" style="margin:4px 0 0">Towers, metrics &amp; connections · refresh 5s</p>
+<body class="dashboard-page debug-page">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <h1>SCS Debug</h1>
+      <span class="topbar-sub">Server & tower diagnostics</span>
+    </div>
+    <div class="topbar-actions">
+      <a href="/" class="btn btn-primary" style="text-decoration:none">Dashboard</a>
+      <a href="/login.html" class="btn btn-ghost" style="text-decoration:none">Sign in</a>
+    </div>
+  </header>
+
+  <main class="debug-main">
+    <div id="statusBanner" class="debug-banner">Loading…</div>
+
+    <div class="tile-row" id="metrics"></div>
+
+    <p class="section-lbl">Connections</p>
+    <div class="conn-tiles" id="connChips"></div>
+
+    <div class="panel-block">
+      <div class="panel-head">Towers <span id="towerCountLabel" class="muted">0</span></div>
+      <div class="tower-table-wrap">
+        <table class="tower-table">
+          <thead>
+            <tr>
+              <th>Tower</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Battery</th>
+              <th>Signal</th>
+              <th>GPS</th>
+              <th>Pi</th>
+              <th>Tel</th>
+              <th>MQTT</th>
+              <th>Queue</th>
+              <th>LED</th>
+              <th>Beacon</th>
+              <th>Cam</th>
+              <th>Age</th>
+              <th>Raw</th>
+            </tr>
+          </thead>
+          <tbody id="towers"></tbody>
+        </table>
       </div>
-      <div class="actions">
-        <a href="/" class="btn blue" style="text-decoration:none;display:inline-block">Dashboard</a>
-        <a href="/login.html" class="btn dark" style="text-decoration:none;display:inline-block">Login</a>
+    </div>
+
+    <div id="rawPanel" class="raw-panel hidden">
+      <div class="raw-panel-head">
+        <span id="rawPanelTitle">Tower raw JSON</span>
+        <div class="raw-panel-actions">
+          <button type="button" class="btn btn-ghost" id="btnCopyRaw" style="padding:4px 10px;font-size:11px">Copy</button>
+          <button type="button" class="btn btn-ghost" id="btnCloseRaw" style="padding:4px 10px;font-size:11px">Close</button>
+        </div>
       </div>
+      <pre id="rawData">—</pre>
     </div>
 
-    <div class="metrics" id="metrics"></div>
-
-    <div class="card" style="margin-bottom:16px">
-      <h3 style="margin-top:0">Connections</h3>
-      <table class="conn" id="connTable">
-        <thead><tr><th>Service</th><th>Status</th><th>Detail</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-    <div class="card" style="margin-bottom:16px">
-      <h3 style="margin-top:0">Towers</h3>
-      <div id="towers"></div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-top:0">Recent commands</h3>
-      <pre id="commands" style="background:#020617;padding:12px;border-radius:10px;overflow:auto;font-size:12px">—</pre>
-    </div>
-  </div>
+    <details class="panel-block commands-tile">
+      <summary>Recent commands</summary>
+      <pre id="commands">—</pre>
+    </details>
+  </main>
 
   <script>
+    let lastDebugPayload = null;
+    let rawViewTowerId = null;
+
     function cls(ok) { return ok ? 'ok' : 'bad'; }
 
+    function escAttr(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
+    }
+
+    function getRawJsonText() {
+      if (!lastDebugPayload) return '';
+      if (rawViewTowerId) {
+        const t = lastDebugPayload.towers?.find((x) => x.id === rawViewTowerId);
+        return JSON.stringify(t || { error: 'Tower not found', id: rawViewTowerId }, null, 2);
+      }
+      return JSON.stringify(lastDebugPayload, null, 2);
+    }
+
+    function updateRawPanelContent() {
+      const pre = document.getElementById('rawData');
+      const title = document.getElementById('rawPanelTitle');
+      if (!pre) return;
+      if (rawViewTowerId) {
+        if (title) title.textContent = rawViewTowerId + ' — tower raw JSON';
+      } else if (title) {
+        title.textContent = 'Tower raw JSON';
+      }
+      pre.textContent = lastDebugPayload ? getRawJsonText() : '—';
+    }
+
+    function toggleRawPanel(show) {
+      const panel = document.getElementById('rawPanel');
+      if (!panel) return;
+      const open = show != null ? show : panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !open);
+      if (!open) rawViewTowerId = null;
+      if (open) updateRawPanelContent();
+    }
+
+    function showTowerRaw(towerId) {
+      rawViewTowerId = towerId;
+      toggleRawPanel(true);
+    }
+
+    document.getElementById('btnCloseRaw').onclick = () => toggleRawPanel(false);
+    document.getElementById('btnCopyRaw').onclick = async () => {
+      const text = getRawJsonText();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        document.getElementById('btnCopyRaw').textContent = 'Copied';
+        setTimeout(() => { document.getElementById('btnCopyRaw').textContent = 'Copy'; }, 1500);
+      } catch {
+        setBanner('Copy failed', true);
+      }
+    };
+
+    document.getElementById('towers').addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-row-raw');
+      if (!btn) return;
+      e.stopPropagation();
+      showTowerRaw(btn.dataset.towerId);
+    });
+
+    function setBanner(msg, isError) {
+      const el = document.getElementById('statusBanner');
+      el.textContent = msg;
+      el.className = isError ? 'debug-banner error' : 'debug-banner';
+    }
+
+    function summaryTile(label, value, sub, valueClass) {
+      return (
+        '<div class="tile">' +
+        '<div class="lbl">' + label + '</div>' +
+        '<div class="val ' + (valueClass || '') + '">' + value + '</div>' +
+        (sub ? '<div class="sub">' + sub + '</div>' : '') +
+        '</div>'
+      );
+    }
+
+    function cell(value, valueClass) {
+      const v = value != null && value !== '' ? value : '—';
+      return '<td class="' + (valueClass || '') + '">' + v + '</td>';
+    }
+
+    function renderTowerRow(t) {
+      const c = t.connections;
+      const online = t.online;
+      const bat = t.battery?.percent != null ? t.battery.percent + '%' : '—';
+      const sig = t.signal?.rssi != null ? t.signal.rssi + ' dBm' : '—';
+      const gps = t.lat != null && t.lng != null ? t.lat + ', ' + t.lng : '—';
+      const age = c.telemetry.ageSec != null ? c.telemetry.ageSec + 's' : '—';
+
+      return (
+        '<tr class="' + (online ? 'online' : 'offline') + '">' +
+        '<td class="cell-id">' + t.id + '</td>' +
+        '<td title="' + (t.name || '') + '">' + (t.name || 'Tower') + '</td>' +
+        cell(online ? 'Live' : 'Off', online ? 'ok' : 'bad') +
+        cell(bat) +
+        cell(sig, t.signal?.rssi != null ? 'ok' : '') +
+        cell(gps) +
+        cell(t.piHost || '—') +
+        cell(c.telemetry.ok ? 'OK' : 'X', cls(c.telemetry.ok)) +
+        cell(c.mqtt.ok ? 'OK' : 'X', cls(c.mqtt.ok)) +
+        cell(c.httpCommandQueue.pending, c.httpCommandQueue.pending ? 'warn' : 'ok') +
+        cell((t.devices?.led || '—').toString().slice(0, 12)) +
+        cell(t.devices?.beaconFlashing ? 'Flash' : t.devices?.beacon ? 'On' : 'Off') +
+        cell(t.camera?.online ? 'On' : 'Off', cls(t.camera?.online)) +
+        cell(age) +
+        '<td class="cell-actions"><button type="button" class="btn btn-ghost btn-row-raw" data-tower-id="' +
+        escAttr(t.id) +
+        '">Raw</button></td>' +
+        '</tr>'
+      );
+    }
+
     async function load() {
-      const res = await fetch('/api/debug/status', { credentials: 'include' });
-      if (res.status === 401) {
-        window.location.href = '/login.html?next=/debug.html';
-        return;
+      try {
+        const res = await fetch('/api/debug/status', { credentials: 'include' });
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          setBanner('Restart server: cd server && npm start', true);
+          return;
+        }
+        if (!res.ok) {
+          setBanner((await res.json().catch(() => ({}))).error || 'Error', true);
+          return;
+        }
+
+        const d = await res.json();
+        lastDebugPayload = d;
+        if (!document.getElementById('rawPanel').classList.contains('hidden')) {
+          updateRawPanelContent();
+        }
+        setBanner('Updated ' + new Date().toLocaleTimeString());
+
+        document.getElementById('metrics').innerHTML =
+          summaryTile('Towers', d.server.towerCount, 'registered') +
+          summaryTile('Online', d.server.onlineCount, 'connected', 'ok') +
+          summaryTile('Uptime', d.server.uptimeSec + 's', 'server') +
+          summaryTile('MQTT', d.connections.mqtt.connected ? 'OK' : 'OFF', d.connections.mqtt.connected ? 'broker' : 'offline', cls(d.connections.mqtt.connected));
+
+        let chips =
+          '<span class="conn-tile ' + (d.connections.mqtt.connected ? 'ok' : 'bad') + '">MQTT ' + (d.connections.mqtt.connected ? 'OK' : 'OFF') + '</span>' +
+          '<span class="conn-tile ok">API :' + d.server.port + '</span>';
+        for (const [id, agent] of Object.entries(d.connections.piAgents || {})) {
+          const ok = agent.ageSec < 90;
+          chips += '<span class="conn-tile ' + (ok ? 'ok' : 'bad') + '">' + id + ' ' + agent.ageSec + 's</span>';
+        }
+        document.getElementById('connChips').innerHTML = chips;
+
+        document.getElementById('towerCountLabel').textContent = d.towers.length;
+        document.getElementById('towers').innerHTML =
+          d.towers.map(renderTowerRow).join('') ||
+          '<tr><td colspan="15" class="muted">No towers</td></tr>';
+
+        document.getElementById('commands').textContent = d.recentCommands?.length
+          ? JSON.stringify(d.recentCommands, null, 2)
+          : 'None';
+      } catch (e) {
+        setBanner('Error: ' + e.message, true);
       }
-      const d = await res.json();
-
-      document.getElementById('metrics').innerHTML = `
-        <div class="card"><div class="muted">Towers</div><h2>${d.server.towerCount}</h2></div>
-        <div class="card"><div class="muted">Online</div><h2 class="ok">${d.server.onlineCount}</h2></div>
-        <div class="card"><div class="muted">Uptime</div><h2>${d.server.uptimeSec}s</h2></div>
-        <div class="card"><div class="muted">MQTT</div><h2 class="${cls(d.connections.mqtt.connected)}">${d.connections.mqtt.connected ? 'OK' : 'OFF'}</h2></div>
-      `;
-
-      const rows = [
-        ['MQTT broker', d.connections.mqtt.connected, d.connections.mqtt.url],
-        ['HTTP API', true, `Port ${d.server.port}`],
-      ];
-      for (const [id, agent] of Object.entries(d.connections.piAgents || {})) {
-        rows.push([`Pi ${id} heartbeat`, agent.ageSec < 90, `last ${agent.ageSec}s ago`]);
-      }
-      document.querySelector('#connTable tbody').innerHTML = rows
-        .map(([name, ok, detail]) => `<tr><td>${name}</td><td class="${cls(ok)}">${ok ? 'OK' : 'FAIL'}</td><td>${detail}</td></tr>`)
-        .join('');
-
-      document.getElementById('towers').innerHTML = d.towers.map((t) => {
-        const c = t.connections;
-        return `<details class="tower-debug" open>
-          <summary>${t.id} — ${t.name} · ${t.online ? '🟢 online' : '🔴 offline'} · ${t.battery?.percent ?? '—'}% · signal ${t.signal?.rssi ?? '—'} dBm</summary>
-          <table class="conn">
-            <tr><td>Telemetry</td><td class="${cls(c.telemetry.ok)}">${c.telemetry.ok ? 'OK' : 'offline'}</td><td>${c.telemetry.lastSeen || 'never'} (${c.telemetry.ageSec ?? '—'}s) · Pi ${c.telemetry.piHost}</td></tr>
-            <tr><td>MQTT path</td><td class="${cls(c.mqtt.ok)}">${c.mqtt.ok ? 'OK' : 'off'}</td><td>${c.mqtt.note}</td></tr>
-            <tr><td>HTTP cmd queue</td><td class="${c.httpCommandQueue.pending ? 'warn' : 'ok'}">${c.httpCommandQueue.pending} pending</td><td>${JSON.stringify(c.httpCommandQueue.commands)}</td></tr>
-          </table>
-          <pre>${JSON.stringify(t, null, 2)}</pre>
-        </details>`;
-      }).join('') || '<p class="muted">No towers registered</p>';
-
-      document.getElementById('commands').textContent = JSON.stringify(d.recentCommands, null, 2);
     }
 
     load();

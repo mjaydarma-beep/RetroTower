@@ -107,6 +107,13 @@ def collect_status() -> dict[str, Any]:
         "agent": {"systemd": "active" if agent_active else "inactive"},
         "config": {
             "towerId": config.tower_id,
+            "location": {
+                "lat": config.tower_lat,
+                "lng": config.tower_lng,
+                "label": config.tower_location or config.tower_name,
+            }
+            if config.tower_lat is not None and config.tower_lng is not None
+            else None,
             "apiUrl": config.api_url,
             "mqttEnabled": config.mqtt_enabled,
             "mqttHost": f"{config.mqtt_host}:{config.mqtt_port}",

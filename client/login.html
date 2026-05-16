@@ -44,8 +44,9 @@
   </div>
   <script>
     (async function () {
+      const nextUrl = new URLSearchParams(location.search).get('next') || '/';
       const me = await fetch('/api/auth/me', { credentials: 'include' });
-      if (me.ok) window.location.href = '/';
+      if (me.ok) window.location.href = nextUrl;
 
       const hint = await fetch('/api/auth/config');
       if (hint.ok) {
@@ -71,7 +72,7 @@
           err.textContent = data.error || 'Login failed';
           return;
         }
-        window.location.href = '/';
+        window.location.href = nextUrl;
       };
     })();
   </script>

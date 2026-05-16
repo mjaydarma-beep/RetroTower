@@ -1,10 +1,13 @@
 import { v4 as uuid } from 'uuid';
+import { getIntegrations } from '../config/integrations.js';
 import { store } from '../data/store.js';
 import { enqueueCommand } from './deviceRegistry.js';
 import { publishCommand } from './mqttBridge.js';
+import { triggerSipAnnouncement } from './sipBridge.js';
 
 export async function executeCommand({ towerIds, action, payload = {}, username = 'operator' }) {
   const results = [];
+  const integ = getIntegrations();
 
   for (const towerId of towerIds) {
     const tower = store.getTower(towerId);
@@ -16,14 +19,42 @@ export async function executeCommand({ towerIds, action, payload = {}, username 
     const cmd = { id: uuid(), action, payload };
     enqueueCommand(towerId, cmd);
     const mqttSent = publishCommand(towerId, action, payload);
-    // Pi without MQTT receives commands on next telemetry POST (~15s)
-    const success = mqttSent || tower.online;
-    if (!mqttSent && tower.online) {
+
+    let sipSent = false;
+    let sipVia = null;
+    if (action === 'announcement') {
+      const sipResult = await triggerSipAnnouncement({
+        towerId,
+        slot: payload.slot,
+        label: payload.label,
+        payload,
+      });
+      sipSent = sipResult.sent;
+      sipVia = sipResult.via;
+    } else if (action === 'evacuation' && integ.sip.enabled) {
+      const sipResult = await triggerSipAnnouncement({
+        towerId,
+        slot: integ.sip.evacSlot,
+        label: 'Evacuation',
+        payload: { ...payload, evacuation: true },
+      });
+      sipSent = sipResult.sent;
+      sipVia = sipResult.via;
+    }
+
+    const httpOk = integ.commands.httpFallback && tower.online;
+    const success = mqttSent || sipSent || httpOk;
+    if (!mqttSent && httpOk) {
       console.log(`[command] queued for HTTP delivery: ${towerId} ${action}`);
     }
+
     applyLocalState(tower, action, payload);
 
-    const result = { towerId, success, towerName: tower.name, via: mqttSent ? 'mqtt' : 'http' };
+    const via = [mqttSent && 'mqtt', sipSent && `sip:${sipVia}`, httpOk && !mqttSent && 'http']
+      .filter(Boolean)
+      .join('+') || 'none';
+
+    const result = { towerId, success, towerName: tower.name, via, sipSent };
     results.push(result);
 
     store.addCommand({
@@ -33,6 +64,7 @@ export async function executeCommand({ towerIds, action, payload = {}, username 
       action,
       payload,
       success: result.success,
+      via,
     });
   }
 

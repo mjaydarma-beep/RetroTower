@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { store } from '../data/store.js';
 import { executeCommand } from '../services/commandService.js';
 import { initMqtt } from '../services/mqttBridge.js';
+import { getIntegrationsPublic } from '../config/integrations.js';
+import { getMqttStatus } from '../services/mqttBridge.js';
+import { getSipStatus } from '../services/sipBridge.js';
 import { requireOperator } from '../middleware/operatorAuth.js';
 import { authRouter } from './auth.js';
 import { debugRouter } from './debug.js';
@@ -11,8 +14,9 @@ const router = Router();
 
 router.use('/auth', authRouter);
 router.use('/device', deviceRouter);
-router.use(requireOperator);
+/** Debug metrics — no login required (local network only) */
 router.use('/debug', debugRouter);
+router.use(requireOperator);
 
 router.get('/towers', (_req, res) => {
   res.json(store.towers);
@@ -32,6 +36,17 @@ router.patch('/towers/:id/camera', (req, res) => {
 
 router.get('/commands/history', (_req, res) => {
   res.json(store.commandHistory);
+});
+
+/** Central integration settings (MQTT / SIP) — change via server/.env */
+router.get('/integrations', (_req, res) => {
+  res.json({
+    ...getIntegrationsPublic(),
+    status: {
+      mqtt: getMqttStatus(),
+      sip: getSipStatus(),
+    },
+  });
 });
 
 router.post('/commands', async (req, res) => {

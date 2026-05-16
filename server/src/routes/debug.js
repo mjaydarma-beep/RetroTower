@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { store } from '../data/store.js';
 import { getRegistrySnapshot } from '../services/deviceRegistry.js';
 import { getMqttStatus } from '../services/mqttBridge.js';
+import { getSipStatus } from '../services/sipBridge.js';
+import { getIntegrationsPublic } from '../config/integrations.js';
 
 export const debugRouter = Router();
 
@@ -45,6 +47,11 @@ debugRouter.get('/status', (_req, res) => {
 
   res.json({
     timestamp: new Date().toISOString(),
+    integrations: {
+      config: getIntegrationsPublic(),
+      mqtt: getMqttStatus(),
+      sip: getSipStatus(),
+    },
     server: {
       uptimeSec: Math.round((now - startedAt) / 1000),
       port: process.env.PORT || 3001,

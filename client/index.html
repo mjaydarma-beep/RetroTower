@@ -3,134 +3,178 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SAFER COMMUNITY EMERGENCY CONTROL</title>
+  <title>SCS Control</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div>
-        <h1>SAFER COMMUNITY EMERGENCY CONTROL</h1>
-        <div class="subtitle">Remote tower operations centre for CCTV, speaker, LED, beacon and battery monitoring</div>
-      </div>
-      <div class="actions">
-        <div class="badge" id="connBadge">Connecting…</div>
-        <div class="badge" id="operatorBadge">Operator</div>
-        <a href="/debug.html" class="btn dark" style="text-decoration:none;display:inline-block">Debug</a>
-        <button type="button" class="btn dark" id="btnLogout">Logout</button>
-        <button type="button" class="btn red" id="btnGlobalEvac">GLOBAL EVACUATION</button>
-      </div>
+<body class="dashboard-page">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <h1>SCS Control</h1>
+      <span class="topbar-sub">Safer Community Emergency</span>
     </div>
-
-    <div class="summary">
-      <div class="card"><div class="muted">Total Towers</div><h2 id="sumTotal">0</h2><div class="muted">Registered sites</div></div>
-      <div class="card"><div class="muted">Online</div><h2 id="sumOnline">0</h2><div style="color:#22c55e">Healthy connection</div></div>
-      <div class="card"><div class="muted">Active Alerts</div><h2 id="sumAlerts">0</h2><div style="color:#f59e0b">Battery / offline / evacuation</div></div>
-      <div class="card"><div class="muted">Emergency Active</div><h2 id="sumEmergency">0</h2><div style="color:#ef4444">Beacon + LED + speaker</div></div>
+    <div class="topbar-status">
+      <span class="chip" id="connBadge">Connecting…</span>
+      <span class="chip chip-muted" id="operatorBadge">Operator</span>
     </div>
+    <div class="topbar-actions">
+      <button type="button" class="btn btn-primary" id="btnMapView">Map view</button>
+      <a href="/debug.html" class="btn btn-ghost">Debug</a>
+      <button type="button" class="btn btn-ghost" id="btnLogout">Sign out</button>
+      <button type="button" class="btn btn-danger" id="btnGlobalEvac">Global evacuation</button>
+    </div>
+  </header>
 
-    <div class="main">
-      <div>
-        <div class="card">
-          <h2>Tower Sites</h2>
-          <div id="towerList"></div>
-        </div>
-        <br />
-        <div class="card">
-          <h2>Command History</h2>
-          <div id="commandHistory">
-            <div class="history-row muted">Waiting for commands…</div>
+  <div class="stat-bar">
+    <div class="stat"><span class="stat-label">Towers</span><span class="stat-value" id="sumTotal">0</span></div>
+    <div class="stat"><span class="stat-label">Online</span><span class="stat-value stat-ok" id="sumOnline">0</span></div>
+    <div class="stat"><span class="stat-label">Alerts</span><span class="stat-value stat-warn" id="sumAlerts">0</span></div>
+    <div class="stat"><span class="stat-label">Emergency</span><span class="stat-value stat-danger" id="sumEmergency">0</span></div>
+  </div>
+
+  <main class="workspace">
+    <section class="panel panel-left">
+      <div class="panel-head">
+        <h2>Towers</h2>
+        <span class="panel-hint">Click row to select · GPS from Pi env</span>
+      </div>
+      <div class="tower-table-wrap">
+        <table class="tower-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Site</th>
+              <th>Status</th>
+              <th>Risk</th>
+              <th>Bat</th>
+              <th>V</th>
+              <th>Signal</th>
+              <th>GPS</th>
+              <th>Pi</th>
+              <th>Beacon</th>
+              <th>LED</th>
+              <th>Cam</th>
+              <th>Seen</th>
+              <th>Raw</th>
+            </tr>
+          </thead>
+          <tbody id="towerTableBody"></tbody>
+        </table>
+      </div>
+      <div id="towerRawPanel" class="tower-raw-panel hidden">
+        <div class="tower-raw-panel-head">
+          <span id="towerRawTitle">Tower raw JSON</span>
+          <div class="tower-raw-panel-actions">
+            <button type="button" class="btn btn-ghost" id="btnTowerRawCopy" style="padding:4px 10px;font-size:11px">Copy</button>
+            <button type="button" class="btn btn-ghost" id="btnTowerRawClose" style="padding:4px 10px;font-size:11px">Close</button>
           </div>
+        </div>
+        <pre id="towerRawData">—</pre>
+      </div>
+    </section>
+
+    <section class="panel panel-right">
+      <div class="tower-head">
+        <div>
+          <h2 id="towerTitle">Select a tower</h2>
+          <p id="towerSub" class="tower-meta">—</p>
+        </div>
+        <span id="riskBadge" class="risk offline">—</span>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric">
+          <span class="metric-label">Battery</span>
+          <span class="metric-value" id="batteryText">—</span>
+          <span class="metric-sub" id="voltageText">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Signal</span>
+          <span class="metric-value" id="signalText">—</span>
+          <span class="metric-sub" id="signalSub">—</span>
+          <div class="signal-bars" id="signalBars" aria-hidden="true"></div>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Health</span>
+          <span class="metric-value" id="healthText">—</span>
+          <span class="metric-sub" id="healthSub">Pi + RUT</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Devices</span>
+          <span class="metric-sub">Spk <b id="speaker">—</b></span>
+          <span class="metric-sub">LED <b id="led">—</b> · Bcn <b id="beacon">—</b></span>
+          <span class="metric-sub" id="router">—</span>
         </div>
       </div>
 
-      <div>
-        <div class="card">
-          <div class="selected-header">
-            <div>
-              <h2 id="towerTitle">Waiting for Pi…</h2>
-              <div id="towerSub" class="muted">Raspberry Pi 192.168.1.20</div>
-            </div>
-            <span id="riskBadge" class="risk offline">Offline</span>
-          </div>
-
-          <div class="detail-grid">
-            <div class="cctv-wrap">
-              <div class="cctv" id="cctvBox"></div>
-              <div class="cctv-url-bar">
-                <input type="url" id="cameraUrl" placeholder="Camera URL — http://… (MJPEG/HLS) or go2rtc page for RTSP" spellcheck="false" />
-                <button type="button" class="btn blue" id="btnCameraSave">Load feed</button>
-                <button type="button" class="btn dark" id="btnCameraTest" title="Mux HLS test stream">Test stream</button>
-              </div>
-              <p class="muted cctv-hint">Browsers cannot play <code>rtsp://</code> directly. Use HTTP/MJPEG, or a <b>go2rtc</b> page URL (e.g. <code>http://192.168.0.2:1984/api/stream.html?src=…</code>).</p>
-            </div>
-            <div>
-              <div class="small-grid small-grid-3">
-                <div class="mini">
-                  <div>Battery</div>
-                  <h2 id="batteryText">—</h2>
-                  <div id="voltageText" class="muted">—</div>
-                </div>
-                <div class="mini">
-                  <div>Signal strength</div>
-                  <h2 id="signalText">—</h2>
-                  <div id="signalSub" class="muted">—</div>
-                  <div class="signal-bars" id="signalBars" aria-hidden="true"></div>
-                </div>
-                <div class="mini">
-                  <div>Device Health</div>
-                  <h2 id="healthText">—</h2>
-                  <div id="healthSub" class="muted">Pi 4 + Teltonika RUT930</div>
-                </div>
-              </div>
-
-              <br />
-
-              <div class="card">
-                <h3>Emergency Controls</h3>
-                <div class="controls">
-                  <button type="button" class="btn red" id="btnEvac">Evacuation Mode</button>
-                  <button type="button" class="btn amber" id="btnAnnounce">Play Announcement</button>
-                  <button type="button" class="btn blue" id="btnBeacon">Activate Beacon</button>
-                  <button type="button" class="btn dark" id="btnStop">Stop All Alerts</button>
-                </div>
-                <div id="announcePanel" class="announce-panel hidden">
-                  <p class="muted" style="margin:0 0 8px;font-size:13px">Predefined SIP announcements (1–10)</p>
-                  <div class="ann-grid" id="annGrid"></div>
-                </div>
-              </div>
-
-              <br />
-
-              <div class="card">
-                <h3>LED Board Message</h3>
-                <textarea id="ledMessage">EVACUATE BEACH NOW</textarea>
-                <button type="button" class="btn dark" style="width:100%;margin-top:10px" id="btnLed">Send LED Message</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <br />
-
-        <div class="card">
-          <h2>Tower Status Detail</h2>
-          <div class="status-grid">
-            <div class="mini"><div class="muted">Speaker</div><b id="speaker">—</b></div>
-            <div class="mini"><div class="muted">LED Board</div><b id="led">—</b></div>
-            <div class="mini"><div class="muted">Beacon</div><b id="beacon">—</b></div>
-            <div class="mini"><div class="muted">Router</div><b id="router">—</b></div>
-          </div>
-          <div style="margin-top:12px">
-            <button type="button" class="btn dark" id="btnReboot">Remote Reboot Pi</button>
-          </div>
+      <div class="cctv-block">
+        <div class="cctv" id="cctvBox"></div>
+        <div class="cctv-bar">
+          <input type="url" id="cameraUrl" placeholder="Camera URL (HLS / MJPEG / go2rtc)" spellcheck="false" />
+          <button type="button" class="btn btn-primary" id="btnCameraSave">Load</button>
+          <button type="button" class="btn btn-ghost" id="btnCameraTest" title="Test stream">Test</button>
         </div>
       </div>
+
+      <div class="control-block">
+        <div class="control-row">
+          <button type="button" class="btn btn-danger" id="btnEvac">Evacuation</button>
+          <button type="button" class="btn btn-warn" id="btnAnnounce">Announcement</button>
+          <button type="button" class="btn btn-primary" id="btnBeacon">Beacon</button>
+          <button type="button" class="btn btn-ghost" id="btnStop">Stop alerts</button>
+          <button type="button" class="btn btn-ghost" id="btnReboot">Reboot Pi</button>
+        </div>
+        <div id="announcePanel" class="announce-panel hidden">
+          <div class="ann-grid" id="annGrid"></div>
+        </div>
+        <div class="led-row">
+          <textarea id="ledMessage" rows="2" placeholder="LED message">EVACUATE BEACH NOW</textarea>
+          <button type="button" class="btn btn-ghost" id="btnLed">Send LED</button>
+        </div>
+      </div>
+
+      <div class="history-block">
+        <div class="panel-head panel-head-tight">
+          <h2>Commands</h2>
+        </div>
+        <div id="commandHistory" class="history-list">
+          <div class="history-row muted">No commands yet</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="mapModal" class="map-modal hidden" aria-hidden="true">
+    <div class="map-modal-bar">
+      <div class="map-modal-title">
+        <h2>Tower map</h2>
+        <span class="map-legend"><span class="leg on"></span> Live</span>
+        <span class="map-legend"><span class="leg off"></span> Offline</span>
+        <span class="map-legend muted" id="mapPlotHint"></span>
+      </div>
+      <button type="button" class="btn btn-ghost" id="btnMapClose">Close</button>
+    </div>
+    <div class="map-modal-body">
+      <div id="mapModalMap" class="map-modal-map"></div>
+      <aside class="map-tower-panel" id="mapTowerPanel">
+        <p class="map-panel-empty" id="mapPanelEmpty">Click a tower on the map</p>
+        <div id="mapPanelDetail" class="map-panel-detail hidden">
+          <div class="map-panel-head">
+            <h3 id="mapTowerTitle">—</h3>
+            <span id="mapTowerRisk" class="risk offline">—</span>
+          </div>
+          <div id="mapTowerMeta" class="map-tower-meta"></div>
+          <div class="map-cctv" id="mapCctvBox"></div>
+          <button type="button" class="btn btn-primary" id="btnMapOpenTower" style="width:100%;margin-top:8px">Open in dashboard</button>
+        </div>
+      </aside>
     </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

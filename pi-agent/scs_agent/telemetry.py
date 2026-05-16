@@ -60,8 +60,7 @@ class TelemetryReporter:
             camera_online = self._check_camera()
 
         pi_host = self._config.pi_reported_host or self._local_ip()
-
-        return {
+        payload: dict[str, Any] = {
             "towerId": self._config.tower_id,
             "piHost": pi_host,
             "hostname": socket.gethostname(),
@@ -84,6 +83,15 @@ class TelemetryReporter:
                 "hostname": socket.gethostname(),
             },
         }
+        if self._config.tower_lat is not None and self._config.tower_lng is not None:
+            label = self._config.tower_location or self._config.tower_name
+            payload["location"] = {
+                "lat": self._config.tower_lat,
+                "lng": self._config.tower_lng,
+                "label": label,
+            }
+            payload["gps"] = {"lat": self._config.tower_lat, "lng": self._config.tower_lng}
+        return payload
 
     def send(self) -> list[dict]:
         """POST telemetry; return pending commands from server if any."""

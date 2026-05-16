@@ -1,10 +1,15 @@
 (function () {
   const CFG = window.SCS_CONFIG;
   let towers = [];
+  let towersRaw = [];
+  let rawViewTowerId = null;
   let selectedId = null;
   let commandHistory = [];
   let cctvHls = null;
-
+  let mapCctvHls = null;
+  let leafletMap = null;
+  let mapMarkerLayer = null;
+  let mapSelectedTowerId = null;
   const $ = (id) => document.getElementById(id);
 
   function riskClass(risk) {
@@ -76,13 +81,30 @@
     }
   }
 
-  function attachHlsPlayback(video, url) {
-    destroyCctvHls();
-    if (window.Hls && window.Hls.isSupported()) {
-      cctvHls = new window.Hls();
-      cctvHls.loadSource(url);
-      cctvHls.attachMedia(video);
-      return;
+  function destroyMapCctvHls() {
+    if (mapCctvHls) {
+      mapCctvHls.destroy();
+      mapCctvHls = null;
+    }
+  }
+
+  function attachHlsPlayback(video, url, forMap) {
+    if (forMap) {
+      destroyMapCctvHls();
+      if (window.Hls && window.Hls.isSupported()) {
+        mapCctvHls = new window.Hls();
+        mapCctvHls.loadSource(url);
+        mapCctvHls.attachMedia(video);
+        return;
+      }
+    } else {
+      destroyCctvHls();
+      if (window.Hls && window.Hls.isSupported()) {
+        cctvHls = new window.Hls();
+        cctvHls.loadSource(url);
+        cctvHls.attachMedia(video);
+        return;
+      }
     }
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;
@@ -90,55 +112,56 @@
     }
     video.insertAdjacentHTML(
       'afterend',
-      '<p class="muted" style="padding:8px">HLS playback not supported in this browser.</p>'
+      '<p class="muted" style="padding:8px">HLS not supported in this browser.</p>'
     );
   }
 
-  function renderCctvBox(t) {
-    destroyCctvHls();
-    const url = t.streamUrl || CFG.DEFAULT_CAMERA_STREAM || '';
-    const input = $('cameraUrl');
-    if (input && document.activeElement !== input) input.value = url;
+  function renderStreamInto(container, url, forMap) {
+    if (!container) return;
+    if (forMap) destroyMapCctvHls();
+    else destroyCctvHls();
 
     if (!url) {
-      $('cctvBox').innerHTML = `<div class="cctv-placeholder">
-         <div class="camera-icon">📵</div>
-         <b>No camera URL</b><br /><span class="muted">Paste a stream URL below and click Load feed</span>
-       </div>`;
+      container.innerHTML =
+        '<div class="cctv-placeholder"><b>No camera</b><br><span class="muted">Set stream URL in dashboard</span></div>';
       return;
     }
 
     const kind = streamKind(url);
     const esc = url.replace(/"/g, '&quot;');
-    let media = '';
+    const videoId = forMap ? 'mapCctvVideo' : 'cctvVideo';
 
     if (kind === 'rtsp') {
-      $('cctvBox').innerHTML = `<div class="live">RTSP</div>
-        <div class="cctv-placeholder">
-          <b>RTSP URL saved</b><br />
-          <span class="muted">Browsers cannot play rtsp:// directly.</span><br />
-          <span class="muted" style="font-size:12px;word-break:break-all">${esc}</span><br /><br />
-          <span class="muted">Use go2rtc on your PC, then paste its <code>stream.html</code> URL here.</span>
-        </div>`;
+      container.innerHTML =
+        '<div class="cctv-placeholder"><b>RTSP</b><br><span class="muted">Use go2rtc HTTP URL</span></div>';
       return;
     }
     if (kind === 'embed') {
-      media = `<iframe class="cctv-stream" src="${esc}" title="CCTV" allow="autoplay; fullscreen"></iframe>`;
-    } else if (kind === 'mjpeg' || kind === 'http') {
-      media = `<img class="cctv-stream" src="${esc}" alt="CCTV live" />`;
-    } else if (kind === 'hls') {
-      $('cctvBox').innerHTML =
-        '<div class="live">● LIVE</div><video id="cctvVideo" class="cctv-stream" autoplay muted playsinline controls></video>';
-      const video = $('cctvVideo');
-      if (video) attachHlsPlayback(video, url);
+      container.innerHTML = `<div class="live">LIVE</div><iframe class="cctv-stream" src="${esc}" title="CCTV" allow="autoplay"></iframe>`;
       return;
-    } else if (kind === 'video') {
-      media = `<video class="cctv-stream" src="${esc}" autoplay muted playsinline controls></video>`;
-    } else {
-      media = `<iframe class="cctv-stream" src="${esc}" title="CCTV"></iframe>`;
     }
+    if (kind === 'mjpeg' || kind === 'http') {
+      container.innerHTML = `<div class="live">LIVE</div><img class="cctv-stream" src="${esc}" alt="CCTV" />`;
+      return;
+    }
+    if (kind === 'hls') {
+      container.innerHTML = `<div class="live">LIVE</div><video id="${videoId}" class="cctv-stream" autoplay muted playsinline controls></video>`;
+      const video = document.getElementById(videoId);
+      if (video) attachHlsPlayback(video, url, forMap);
+      return;
+    }
+    if (kind === 'video') {
+      container.innerHTML = `<div class="live">LIVE</div><video class="cctv-stream" src="${esc}" autoplay muted playsinline controls></video>`;
+      return;
+    }
+    container.innerHTML = `<div class="live">LIVE</div><iframe class="cctv-stream" src="${esc}" title="CCTV"></iframe>`;
+  }
 
-    $('cctvBox').innerHTML = `<div class="live">● LIVE</div>${media}`;
+  function renderCctvBox(t) {
+    const url = t.streamUrl || CFG.DEFAULT_CAMERA_STREAM || '';
+    const input = $('cameraUrl');
+    if (input && document.activeElement !== input) input.value = url;
+    renderStreamInto($('cctvBox'), url, false);
   }
 
   async function saveCameraUrl() {
@@ -220,31 +243,73 @@
     }
   }
 
+  function getTowerRawJsonText() {
+    if (!rawViewTowerId) return '';
+    const t = towersRaw.find((x) => x.id === rawViewTowerId);
+    return JSON.stringify(t || { error: 'Tower not found', id: rawViewTowerId }, null, 2);
+  }
+
+  function updateTowerRawPanel() {
+    const panel = $('towerRawPanel');
+    if (!panel || panel.classList.contains('hidden')) return;
+    $('towerRawTitle').textContent = rawViewTowerId
+      ? `${rawViewTowerId} — tower raw JSON`
+      : 'Tower raw JSON';
+    $('towerRawData').textContent = getTowerRawJsonText() || '—';
+  }
+
+  function showTowerRaw(towerId) {
+    rawViewTowerId = towerId;
+    $('towerRawPanel')?.classList.remove('hidden');
+    updateTowerRawPanel();
+  }
+
+  function closeTowerRaw() {
+    rawViewTowerId = null;
+    $('towerRawPanel')?.classList.add('hidden');
+  }
+
   async function loadTowers() {
     try {
       const data = await api('/api/towers');
+      towersRaw = data;
       towers = data.map(normalizeTower);
       $('connBadge').textContent = towers.some((t) => t.online)
-        ? 'Live — Pi connected'
-        : 'Live — waiting for Pi';
-      $('connBadge').className = 'badge conn-ok';
+        ? 'Connected'
+        : 'Waiting for Pi';
+      $('connBadge').className = 'chip';
     } catch (e) {
       towers = [];
-      $('connBadge').textContent = 'Server offline — start: cd server && npm start';
-      $('connBadge').className = 'badge conn-warn';
+      $('connBadge').textContent = 'Server offline';
+      $('connBadge').className = 'chip conn-warn';
     }
     if (!selectedId && towers.length) selectedId = towers[0].id;
     if (selectedId && !towers.find((t) => t.id === selectedId)) selectedId = towers[0]?.id || null;
+    if (rawViewTowerId) updateTowerRawPanel();
     render();
+  }
+
+  function towerCoords(t) {
+    const lat = t.lat ?? t.gps?.lat;
+    const lng = t.lng ?? t.gps?.lng;
+    if (lat == null || lng == null) return null;
+    const la = Number(lat);
+    const ln = Number(lng);
+    if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+    if (la === 0 && ln === 0) return null;
+    return { lat: la, lng: ln };
   }
 
   function normalizeTower(t) {
     const bat = t.battery || {};
     const risk = computeRisk(t);
+    const coords = towerCoords(t);
     return {
       id: t.id,
       name: t.name,
       zone: t.zone || t.name,
+      lat: coords?.lat,
+      lng: coords?.lng,
       online: t.online,
       battery: Math.round(bat.percent ?? 0),
       voltage: `${(bat.voltage ?? 0).toFixed(1)}V`,
@@ -256,7 +321,7 @@
       lastSeen: formatLastSeen(t.lastSeen),
       lastSeenRaw: t.lastSeen,
       risk,
-      gps: t.gps?.lat ? `${t.gps.lat}, ${t.gps.lng}` : '—',
+      gps: coords ? `${coords.lat}, ${coords.lng}` : '—',
       emergencyActive: t.emergencyActive,
       piHost: t.piHost || '—',
       router: t.routerConnected ? `Teltonika RUT — Connected` : 'Disconnected',
@@ -265,43 +330,67 @@
     };
   }
 
-  function renderTowerList() {
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderTowerTable() {
+    const body = $('towerTableBody');
+    if (!body) return;
+
     if (!towers.length) {
-      $('towerList').innerHTML = `
-        <div class="history-row muted" style="padding:1rem">
+      body.innerHTML = `
+        <tr><td colspan="15" class="muted" style="padding:1rem;white-space:normal">
           No tower online yet.<br><br>
           1. Start server on PC: <code>cd server && npm start</code><br>
-          2. On Pi (192.168.1.20): set API_URL to your PC IP in /etc/scs-agent.env<br>
+          2. On Pi: set API_URL in /etc/scs-agent.env<br>
           3. <code>sudo systemctl restart scs-agent</code>
-        </div>`;
+        </td></tr>`;
       return;
     }
 
-    $('towerList').innerHTML = towers
+    body.innerHTML = towers
       .map(
         (t) => `
-      <button type="button" class="tower ${t.id === selectedId ? 'active' : ''}" data-id="${t.id}">
-        <div class="tower-top">
-          <div>
-            <b>${t.id} — ${t.name}</b>
-            <div class="muted">${t.zone} · Pi ${t.piHost}</div>
-          </div>
-          <div>${t.online ? '🟢' : '🔴'}</div>
-        </div>
-        <div class="tower-bottom">
-          <span class="risk ${riskClass(t.risk)}">${t.risk}</span>
-          <b>${t.battery}% · ${t.text !== '—' ? t.text : 'no signal'}</b>
-        </div>
-      </button>`
+      <tr class="${t.id === selectedId ? 'active' : ''}" data-id="${esc(t.id)}">
+        <td class="cell-id">${esc(t.id)}</td>
+        <td>${esc(t.name)}</td>
+        <td>${esc(t.zone)}</td>
+        <td><span class="status-dot ${t.online ? 'on' : 'off'}"></span>${t.online ? 'Online' : 'Offline'}</td>
+        <td><span class="risk-pill risk ${riskClass(t.risk)}">${esc(t.risk)}</span></td>
+        <td><b>${t.battery}%</b></td>
+        <td>${esc(t.voltage)}</td>
+        <td>${esc(t.text)}</td>
+        <td>${esc(t.gps)}</td>
+        <td>${esc(t.piHost)}</td>
+        <td>${t.beacon ? 'On' : 'Off'}</td>
+        <td>${esc(t.led)}</td>
+        <td>${t.camera ? 'On' : 'Off'}</td>
+        <td>${esc(t.lastSeen)}</td>
+        <td class="cell-actions"><button type="button" class="btn btn-ghost btn-row-raw" data-id="${esc(t.id)}">Raw</button></td>
+      </tr>`
       )
       .join('');
 
-    document.querySelectorAll('.tower').forEach((btn) => {
-      btn.onclick = () => {
-        selectedId = btn.dataset.id;
-        render();
-      };
-    });
+    if (!body.dataset.rawBound) {
+      body.dataset.rawBound = '1';
+      body.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-row-raw');
+        if (btn) {
+          e.stopPropagation();
+          showTowerRaw(btn.dataset.id);
+          return;
+        }
+        const row = e.target.closest('tr[data-id]');
+        if (row) {
+          selectedId = row.dataset.id;
+          render();
+        }
+      });
+    }
   }
 
   function renderSelectedTower() {
@@ -319,7 +408,7 @@
     }
 
     $('towerTitle').textContent = `${t.id} — ${t.name}`;
-    $('towerSub').textContent = `Pi ${t.piHost} · Signal ${t.text} · Last seen ${t.lastSeen}`;
+    $('towerSub').textContent = `Pi ${t.piHost} · GPS ${t.gps} · Signal ${t.text} · Last seen ${t.lastSeen}`;
     $('riskBadge').textContent = t.risk;
     $('riskBadge').className = `risk ${riskClass(t.risk)}`;
     $('batteryText').textContent = `${t.battery}%`;
@@ -362,9 +451,122 @@
     });
   }
 
+
+  function isMapOpen() {
+    return $('mapModal') && !$('mapModal').classList.contains('hidden');
+  }
+
+  function initLeafletMap() {
+    if (leafletMap || !window.L) return;
+    const el = $('mapModalMap');
+    if (!el) return;
+    leafletMap = window.L.map(el, { scrollWheelZoom: true }).setView([-32.057, 115.752], 13);
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(leafletMap);
+    mapMarkerLayer = window.L.layerGroup().addTo(leafletMap);
+  }
+
+  function mapMarkerHtml(online) {
+    const cls = online ? 'on' : 'off';
+    return `<div class="tower-map-marker"><div class="pin ${cls}"></div></div>`;
+  }
+
+  function selectMapTower(t) {
+    mapSelectedTowerId = t.id;
+    $('mapPanelEmpty').classList.add('hidden');
+    $('mapPanelDetail').classList.remove('hidden');
+    $('mapTowerTitle').textContent = `${t.id} — ${t.name}`;
+    $('mapTowerRisk').textContent = t.risk;
+    $('mapTowerRisk').className = `risk ${riskClass(t.risk)}`;
+    $('mapTowerMeta').innerHTML = [
+      `<div><b>Status</b> ${t.online ? 'Live' : 'Offline'}</div>`,
+      `<div><b>Site</b> ${esc(t.zone)}</div>`,
+      `<div><b>Battery</b> ${t.battery}% · ${esc(t.voltage)}</div>`,
+      `<div><b>Signal</b> ${esc(t.text)}</div>`,
+      `<div><b>GPS</b> ${esc(t.gps)}</div>`,
+      `<div><b>Pi</b> ${esc(t.piHost)} · ${esc(t.lastSeen)}</div>`,
+      `<div><b>Beacon</b> ${t.beacon ? 'On' : 'Off'} · <b>LED</b> ${esc(t.led)}</div>`,
+    ].join('');
+    const url = t.streamUrl || CFG.DEFAULT_CAMERA_STREAM || '';
+    renderStreamInto($('mapCctvBox'), url, true);
+  }
+
+  function clearMapTowerPanel() {
+    mapSelectedTowerId = null;
+    $('mapPanelEmpty').classList.remove('hidden');
+    $('mapPanelDetail').classList.add('hidden');
+    destroyMapCctvHls();
+    if ($('mapCctvBox')) $('mapCctvBox').innerHTML = '';
+  }
+
+  function updateMapMarkers() {
+    if (!leafletMap || !mapMarkerLayer) return;
+    mapMarkerLayer.clearLayers();
+    const plotted = towers.filter((t) => t.lat != null && t.lng != null);
+    const noGps = towers.length - plotted.length;
+    const hint = $('mapPlotHint');
+    if (hint) {
+      hint.textContent = plotted.length
+        ? `${plotted.length} plotted` + (noGps ? ` · ${noGps} no GPS` : '')
+        : noGps ? `${noGps} tower(s) need TOWER_LAT/LNG` : '';
+    }
+    if (!plotted.length) {
+      clearMapTowerPanel();
+      return;
+    }
+    const bounds = [];
+    for (const t of plotted) {
+      const icon = window.L.divIcon({
+        className: 'tower-map-marker',
+        html: mapMarkerHtml(t.online),
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      const marker = window.L.marker([t.lat, t.lng], { icon });
+      marker.bindPopup(
+        `<b>${esc(t.id)}</b><br>${esc(t.name)}<br>${t.online ? 'Live' : 'Offline'} · ${t.battery}%`
+      );
+      marker.on('click', () => selectMapTower(t));
+      mapMarkerLayer.addLayer(marker);
+      bounds.push([t.lat, t.lng]);
+    }
+    if (bounds.length === 1) leafletMap.setView(bounds[0], 14);
+    else leafletMap.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
+    if (mapSelectedTowerId) {
+      const sel = plotted.find((x) => x.id === mapSelectedTowerId);
+      if (sel) selectMapTower(sel);
+      else clearMapTowerPanel();
+    }
+  }
+
+  function openMapView() {
+    if (!window.L) {
+      toast('Map library not loaded');
+      return;
+    }
+    const plotted = towers.filter((t) => t.lat != null && t.lng != null);
+    if (!plotted.length) {
+      toast('No tower GPS — set TOWER_LAT and TOWER_LNG on Pi');
+    }
+    $('mapModal').classList.remove('hidden');
+    $('mapModal').setAttribute('aria-hidden', 'false');
+    initLeafletMap();
+    updateMapMarkers();
+    setTimeout(() => leafletMap && leafletMap.invalidateSize(), 150);
+  }
+
+  function closeMapView() {
+    $('mapModal').classList.add('hidden');
+    $('mapModal').setAttribute('aria-hidden', 'true');
+    clearMapTowerPanel();
+  }
+
   function render() {
-    renderTowerList();
+    renderTowerTable();
     renderSelectedTower();
+    if (isMapOpen()) updateMapMarkers();
   }
 
   function bindControls() {
@@ -406,6 +608,14 @@
     $('cameraUrl').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') saveCameraUrl();
     });
+    $('btnMapView').onclick = () => openMapView();
+    $('btnMapClose').onclick = () => closeMapView();
+    $('btnMapOpenTower').onclick = () => {
+      if (!mapSelectedTowerId) return;
+      selectedId = mapSelectedTowerId;
+      closeMapView();
+      render();
+    };
     $('btnLogout').onclick = async () => {
       await fetch(`${CFG.API_URL}/api/auth/logout`, {
         method: 'POST',
@@ -413,11 +623,37 @@
       });
       window.location.href = '/login.html';
     };
+    $('btnTowerRawClose').onclick = () => closeTowerRaw();
+    $('btnTowerRawCopy').onclick = async () => {
+      const text = getTowerRawJsonText();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        $('btnTowerRawCopy').textContent = 'Copied';
+        setTimeout(() => {
+          $('btnTowerRawCopy').textContent = 'Copy';
+        }, 1500);
+      } catch {
+        toast('Copy failed');
+      }
+    };
+  }
+
+  async function loadIntegrations() {
+    try {
+      const data = await api('/api/integrations');
+      if (data.announcements?.length) {
+        CFG.ANNOUNCEMENTS = data.announcements;
+      }
+    } catch {
+      /* use client/config.js defaults */
+    }
   }
 
   async function start() {
     const me = await ensureLoggedIn();
     if (!me) return;
+    await loadIntegrations();
     renderAnnouncements();
     bindControls();
     loadTowers();
