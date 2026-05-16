@@ -3,7 +3,7 @@
  * Configure in server/.env (see .env.example).
  */
 
-import { getIntegrations } from '../config/integrations.js';
+import { getIntegrations, findAnnouncementSlot } from '../config/integrations.js';
 import { publishRaw } from './mqttBridge.js';
 
 let lastTrigger = null;
@@ -29,16 +29,33 @@ export async function triggerSipAnnouncement({ towerId, slot, label, payload = {
     return { sent: false, reason: 'sip_disabled' };
   }
 
-  const slotDef = slot != null ? { slot, label, sipRef: String(slot) } : null;
-  const sipRef = slotDef?.sipRef ?? String(slot ?? '');
+  const slotN = slot != null ? Number(slot) : null;
+  const slotDef = slotN != null ? findAnnouncementSlot(slotN) : null;
+  const sipRef = payload.sipRef ?? slotDef?.sipRef ?? String(slot ?? '');
+  const mp3File =
+    payload.mp3 ?? payload.file ?? slotDef?.mp3 ?? slotDef?.file ?? `${sipRef}.mp3`;
+  const msgLabel = label || slotDef?.label || `Announcement ${slot}`;
+
+  /** Payload for SIP/PA speakers with stored MP3 (HTTP or MQTT). */
   const body = {
+    action: 'play',
+    command: 'play',
     towerId,
-    slot: Number(slot),
-    label: label || slotDef?.label || `Announcement ${slot}`,
+    slot: slotN,
+    label: msgLabel,
     sipRef,
+    mp3: mp3File,
+    file: mp3File,
+    track: sipRef,
+    trackId: sipRef,
     extension: payload.extension || sip.defaultExtension,
     timestamp: new Date().toISOString(),
+    evacuation: Boolean(payload.evacuation),
     ...payload,
+    label: msgLabel,
+    sipRef,
+    mp3: mp3File,
+    file: mp3File,
   };
 
   const results = [];

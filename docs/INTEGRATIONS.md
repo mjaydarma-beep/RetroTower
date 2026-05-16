@@ -98,18 +98,55 @@ SIP_HTTP_URL=http://192.168.1.100:8088/api/announce
 SIP_HTTP_TOKEN=my-secret-key
 ```
 
-### MQTT example
+### MQTT example (SIP speaker with stored MP3)
 
-SIP gateway subscribes to `scs/sip/announce` and plays audio by `sipRef` or `slot`.
+Many IP PA / “SIP speaker” boxes subscribe to MQTT and play a file when they receive JSON.
 
 ```env
 SIP_ENABLED=true
 SIP_MODE=mqtt
+MQTT_ENABLED=true
 MQTT_URL=mqtt://192.168.1.50:1883
 SIP_MQTT_TOPIC=scs/sip/announce
 ```
 
-Requires `MQTT_ENABLED=true` on the server (same broker).
+**Message published** when operator clicks announcement slot 2:
+
+```json
+{
+  "action": "play",
+  "command": "play",
+  "towerId": "TWR-001",
+  "slot": 2,
+  "label": "Evacuate beach",
+  "sipRef": "02",
+  "mp3": "evac_beach.mp3",
+  "file": "evac_beach.mp3",
+  "track": "02",
+  "trackId": "02",
+  "extension": "100",
+  "timestamp": "2026-05-16T12:00:00.000Z",
+  "evacuation": false
+}
+```
+
+Your speaker firmware must map **`sipRef`**, **`mp3`**, or **`file`** to the correct stored clip (see device manual).
+
+Map slots in `.env`:
+
+```env
+ANNOUNCEMENT_SLOTS_JSON=[{"slot":1,"label":"All clear","sipRef":"01","mp3":"all_clear.mp3"},{"slot":2,"label":"Evacuate beach","sipRef":"02","mp3":"evac_beach.mp3"}]
+```
+
+Restart server after editing. Dashboard buttons load from `GET /api/integrations`.
+
+**Test with Mosquitto** (subscribe on PC):
+
+```bash
+mosquitto_sub -h 192.168.1.50 -t scs/sip/announce -v
+```
+
+Then click an announcement on the dashboard — you should see the JSON. If the speaker uses a **different topic**, set `SIP_MQTT_TOPIC` to match.
 
 ### Both HTTP and MQTT
 

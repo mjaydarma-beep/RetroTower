@@ -109,10 +109,11 @@ export function getIntegrationsPublic() {
       evacSlot: c.sip.evacSlot,
       announcementCount: c.sip.slots.length,
     },
-    announcements: c.sip.slots.map(({ slot, label, sipRef }) => ({
+    announcements: c.sip.slots.map(({ slot, label, sipRef, mp3, file }) => ({
       slot,
       label,
       sipRef: sipRef ?? String(slot),
+      mp3: mp3 ?? file ?? `${sipRef ?? slot}.mp3`,
     })),
     commands: c.commands,
   };
