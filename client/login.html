@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operator Login — SCS Control</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .login-wrap {
+      min-height: 80vh; display: flex; align-items: center; justify-content: center;
+    }
+    .login-card {
+      width: 100%; max-width: 400px;
+    }
+    .login-card h2 { margin: 0 0 8px; }
+    .login-card label {
+      display: block; font-size: 13px; color: #94a3b8; margin: 14px 0 6px;
+    }
+    .login-card input {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1px solid #334155; background: #0f172a; color: #f8fafc;
+    }
+    .login-card button { width: 100%; margin-top: 18px; }
+    .login-error { color: #f87171; font-size: 13px; margin-top: 12px; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="card login-card">
+      <h2>Operator login</h2>
+      <p class="muted" style="margin:0">SAFER COMMUNITY EMERGENCY CONTROL</p>
+
+      <form id="loginForm">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+        <button type="submit" class="btn blue">Sign in</button>
+      </form>
+      <p id="loginError" class="login-error"></p>
+    </div>
+  </div>
+  <script>
+    (async function () {
+      const me = await fetch('/api/auth/me', { credentials: 'include' });
+      if (me.ok) window.location.href = '/';
+
+      const hint = await fetch('/api/auth/config');
+      if (hint.ok) {
+        const cfg = await hint.json();
+        if (cfg.usernameHint) document.getElementById('username').value = cfg.usernameHint;
+      }
+
+      document.getElementById('loginForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const err = document.getElementById('loginError');
+        err.textContent = '';
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          err.textContent = data.error || 'Login failed';
+          return;
+        }
+        window.location.href = '/';
+      };
+    })();
+  </script>
+</body>
+</html>

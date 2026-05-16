@@ -1,0 +1,15 @@
+[Unit]
+Description=SCS Pi local debug page (metrics and connections)
+After=network-online.target scs-agent.service
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/scs-agent.env
+WorkingDirectory=/opt/scs-agent
+ExecStart=/opt/scs-agent/venv/bin/python -m scs_agent.debug_server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

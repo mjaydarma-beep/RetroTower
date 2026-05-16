@@ -1,0 +1,23 @@
+# Dependencies
+server/node_modules/
+pi-agent/venv/
+**/__pycache__/
+*.pyc
+
+# Secrets — never commit
+server/.env
+.env
+*.pem
+**/credentials*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build artifacts (regenerate on Pi or PC)
+pi-agent-upload.zip
+
+# Logs
+*.log

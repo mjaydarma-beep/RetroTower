@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCS Remote Tower Control - Preview</title>
+<style>
+:root{--bg:#0a0e17;--panel:#111827;--card:#1a2332;--border:#2d3a4f;--text:#e8edf4;--muted:#8b9cb3;--accent:#3b82f6;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--emergency:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.banner{text-align:center;padding:.35rem;background:#422006;color:var(--warning);font-size:.75rem}
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;background:var(--panel);border-bottom:1px solid var(--border)}
+.hdr h1{font-size:1.1rem}.hl{display:flex;align-items:center;gap:1rem}.live{font-size:.65rem;padding:.2rem .5rem;border-radius:999px;background:rgba(34,197,94,.2);color:var(--success)}
+.ha{display:flex;align-items:center;gap:.75rem}.btn{border:none;border-radius:6px;padding:.5rem 1rem;font-size:.8rem;cursor:pointer;font-family:inherit}
+.evac{background:var(--emergency);color:#fff;font-weight:700}.sec{background:var(--card);color:var(--text);border:1px solid var(--border)}.pri{background:var(--accent);color:#fff}.dan{background:var(--danger);color:#fff;width:100%;margin-bottom:.5rem}
+.user{font-size:.8rem;color:var(--muted)}.tabs{display:flex;gap:.25rem;padding:.5rem 1.25rem;background:var(--panel);border-bottom:1px solid var(--border)}
+.tab{background:transparent;color:var(--muted);border:none;padding:.4rem 1rem;border-radius:6px;cursor:pointer;font-family:inherit}.tab.on{background:var(--card);color:var(--text)}
+.grid{display:grid;grid-template-columns:260px 1fr 280px;gap:.75rem;padding:.75rem}.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.ph{display:flex;justify-content:space-between;padding:.65rem 1rem;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:600}
+.ti{display:flex;align-items:center;gap:.5rem;padding:.75rem 1rem;border-bottom:1px solid var(--border);cursor:pointer}.ti:hover,.ti.sel{background:rgba(59,130,246,.12)}.ti.sel{border-left:3px solid var(--accent)}
+.ti small{display:block;color:var(--muted);font-size:.7rem}.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.dot.on{background:var(--success)}.dot.off{background:#6b7280}
+.center{display:flex;flex-direction:column;gap:.75rem}.map{height:220px;background:linear-gradient(135deg,#1e3a5f,#0f172a);border-radius:8px;border:1px solid var(--border);position:relative}
+.pin{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;transform:translate(-50%,-50%)}.pin.on{background:var(--success)}.pin.off{background:#6b7280}
+.split{display:grid;grid-template-columns:1fr 300px;gap:.75rem}.sub{border:1px solid var(--border);border-radius:8px 8px 0 0;border-bottom:0;background:var(--panel)}
+.cctv{background:#000;border:1px solid var(--border);border-radius:0 0 8px 8px;min-height:200px;position:relative;border-top:0}
+.cctv .in{min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:.25rem}
+.liveb{position:absolute;top:8px;right:8px;background:var(--emergency);color:#fff;font-size:.6rem;font-weight:700;padding:.2rem .5rem;border-radius:4px}
+.cbar{position:absolute;bottom:0;left:0;right:0;padding:.4rem .6rem;background:linear-gradient(transparent,rgba(0,0,0,.85));font-size:.65rem;display:flex;justify-content:space-between}
+.gauge{height:24px;background:var(--bg);border-radius:6px;overflow:hidden;margin:.5rem 1rem;position:relative}.fill{height:100%;background:var(--success);transition:width .3s}
+.gauge span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;padding:0 1rem .75rem}.t{background:var(--bg);padding:.35rem .5rem;border-radius:4px;font-size:.75rem}.t label{display:block;font-size:.6rem;color:var(--muted);text-transform:uppercase}
+.ctrl{padding:.75rem 1rem}.ctrl label{font-size:.75rem;color:var(--muted);display:block;margin:.5rem 0 .25rem}.ctrl select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:.4rem;font-family:inherit}
+.ann{display:grid;grid-template-columns:repeat(5,1fr);gap:.35rem;margin:.5rem 0}.ab{padding:.4rem .2rem;font-size:.65rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-top:.5rem}.al{padding:.75rem 1rem;border-bottom:1px solid var(--border);font-size:.8rem}.al.w{border-left:3px solid var(--warning)}.al.e{border-left:3px solid var(--danger)}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}.split{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="banner">Static preview - Raspberry Pi 4, MQTT LED, SIP x10, Teltonika VPN, GPIO relays</div>
+<header class="hdr"><div class="hl"><h1>SCS Remote Tower Control</h1><span class="live">LIVE</span></div>
+<div class="ha"><button type="button" class="btn evac" onclick="toast('Global evacuation')">GLOBAL EVACUATION</button><span class="user">Operator</span><button type="button" class="btn sec">Logout</button></div></header>
+<nav class="tabs"><button type="button" class="tab on">Live Dashboard</button><button type="button" class="tab">Command History</button><button type="button" class="tab">Admin</button></nav>
+<div class="grid">
+<aside class="panel"><div class="ph">Towers <span style="color:var(--muted);font-weight:400">4</span></div><div id="tl"></div></aside>
+<main class="center">
+<div class="map"><div class="pin on" style="left:35%;top:40%"></div><div class="pin on" style="left:55%;top:35%"></div><div class="pin off" style="left:45%;top:60%"></div><div class="pin on" style="left:25%;top:55%"></div></div>
+<div class="split">
+<div><div class="ph sub">Live CCTV - <span id="cn">North Perimeter Tower</span></div>
+<div class="cctv"><span class="liveb">LIVE</span><div class="in" id="cp"><span style="font-size:2rem">&#128247;</span><p>Simulated feed</p><p style="font-size:.7rem">RTSP to HLS/WebRTC</p></div>
+<div class="cbar"><span id="ci">tower-001</span><span>GPS 51.5074, -0.1278</span></div></div></div>
+<div><div class="panel"><div class="ph">Battery and Signal <span id="h" style="color:var(--success)">GOOD</span></div>
+<div class="gauge"><div class="fill" id="gf" style="width:87%"></div><span id="bp">87%</span></div>
+<div class="tg"><div class="t"><label>Voltage</label><span id="v">12.6 V</span></div><div class="t"><label>Current</label><span>2.1 A</span></div>
+<div class="t"><label>VPN/RUT</label><span id="vpn" style="color:var(--success)">Connected</span></div><div class="t"><label>RSSI</label><span id="r">-72 dBm</span></div>
+<div class="t"><label>Charging</label><span>No</span></div><div class="t"><label>Raspberry Pi 4</label><span id="pi">Online</span></div></div></div>
+<div class="panel ctrl" style="margin-top:.75rem"><div class="ph" style="border:0">Emergency Controls</div>
+<button type="button" class="btn dan" onclick="toast('Evacuation')">Trigger Evacuation</button>
+<button type="button" class="btn sec" style="width:100%;margin-bottom:.5rem" onclick="toast('Stopped')">Stop All Alerts</button>
+<label>LED board (MQTT)</label><select><option>EVACUATE - Follow routes</option><option>All clear</option><option>Test message</option></select>
+<button type="button" class="btn pri" style="width:100%;margin-top:.35rem" onclick="toast('LED sent')">Send to LED Board</button>
+<label>Announcements SIP x10</label><div class="ann" id="ag"></div>
+<div class="r2"><button type="button" class="btn sec" onclick="toast('Beacon ON')">Beacon ON</button><button type="button" class="btn sec" onclick="toast('Beacon OFF')">Beacon OFF</button></div>
+<button type="button" class="btn sec" style="width:100%;margin-top:.5rem" onclick="toast('Reboot Pi')">Remote Reboot Pi</button>
+</div></div></div></main>
+<aside class="panel"><div class="ph">Alerts <span style="color:var(--warning)">2</span></div>
+<div class="al e"><strong>Camera Offline</strong><p style="font-size:.65rem;color:var(--muted);margin-top:.25rem">West Loading</p>
+<button type="button" class="btn sec" style="margin-top:.35rem;font-size:.7rem" onclick="toast('Ack')">Acknowledge</button></div>
+<div class="al w"><strong>Low Battery 18%</strong><p style="font-size:.65rem;color:var(--muted);margin-top:.25rem">South Yard</p>
+<button type="button" class="btn sec" style="margin-top:.35rem;font-size:.7rem" onclick="toast('Ack')">Acknowledge</button></div></aside>
+</div>
+<script>
+var T=[{id:'tower-001',name:'North Perimeter Tower',on:1,b:87,v:12.6,r:-72},{id:'tower-002',name:'East Gate Tower',on:1,b:62,v:11.8,r:-68},{id:'tower-003',name:'South Yard Tower',on:0,b:18,v:10.2,r:-95},{id:'tower-004',name:'West Loading Tower',on:1,b:45,v:11.2,r:-78}];
+var A=['All clear','Evacuate','Test','Lockdown','Maint','Weather','Intruder','Fire','Stand by','Custom'],S=T[0];
+function toast(m){var e=document.createElement('div');e.textContent=m;e.style.cssText='position:fixed;bottom:20px;right:20px;background:#1a2332;border:1px solid #3b82f6;padding:12px 20px;border-radius:8px;z-index:9999';document.body.appendChild(e);setTimeout(function(){e.remove()},2500)}
+function R(){document.getElementById('tl').innerHTML=T.map(function(x){return'<div class="ti '+(x.id===S.id?'sel':'')+'" data-i="'+x.id+'"><input type="checkbox" onclick="event.stopPropagation()"><span class="dot '+(x.on?'on':'off')+'"></span><div><strong>'+x.name+'</strong><small>'+(x.on?'Online':'Offline')+' - Bat '+Math.round(x.b)+'% - RPi4</small></div></div>'}).join('');document.querySelectorAll('.ti').forEach(function(el){el.onclick=function(){S=T.find(function(x){return x.id===el.dataset.i});document.getElementById('cn').textContent=S.name;document.getElementById('ci').textContent=S.id;document.getElementById('bp').textContent=Math.round(S.b)+'%';document.getElementById('gf').style.width=S.b+'%';document.getElementById('gf').style.background=S.b<25?'var(--danger)':S.b<50?'var(--warning)':'var(--success)';document.getElementById('v').textContent=S.v+' V';document.getElementById('r').textContent=S.r+' dBm';document.getElementById('vpn').textContent=S.on?'Connected':'Down';document.getElementById('vpn').style.color=S.on?'var(--success)':'var(--danger)';document.getElementById('pi').textContent=S.on?'Online':'Offline';document.getElementById('h').textContent=S.b<25?'CRITICAL':S.b<50?'FAIR':'GOOD';document.getElementById('cp').innerHTML=S.on?'<span style="font-size:2rem">&#128247;</span><p>Simulated feed</p>':'<span style="font-size:2rem">&#128247;</span><p>Offline</p>';R()}})}
+document.getElementById('ag').innerHTML=A.map(function(a,i){return'<button type="button" class="ab" onclick="toast(\'Play: '+a+'\')">'+(i+1)+'</button>'}).join('');
+R();setInterval(function(){var x=T.find(function(t){return t.id==='tower-001'&&t.on});if(x){x.b=Math.max(20,x.b+(Math.random()-.5));if(S.id===x.id)document.querySelector('[data-i="tower-001"]').click()}},4000);
+</script>
+</body>
+</html>

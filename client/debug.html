@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SCS Server Debug</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .debug-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .debug-header h1 { margin: 0; font-size: 1.4rem; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .metrics .card { padding: 12px; }
+  .metrics h2 { margin: 4px 0 0; font-size: 1.5rem; }
+  .ok { color: #4ade80; }
+  .bad { color: #f87171; }
+  .warn { color: #fbbf24; }
+  .tower-debug { margin-bottom: 14px; }
+  .tower-debug summary { cursor: pointer; font-weight: bold; padding: 8px 0; }
+  .tower-debug pre { background: #020617; padding: 12px; border-radius: 10px; overflow: auto; font-size: 12px; max-height: 320px; }
+  table.conn { width: 100%; font-size: 13px; border-collapse: collapse; }
+  table.conn td, table.conn th { border-bottom: 1px solid #334155; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="debug-header">
+      <div>
+        <h1>SCS Control Center — Debug</h1>
+        <p class="muted" style="margin:4px 0 0">Towers, metrics &amp; connections · refresh 5s</p>
+      </div>
+      <div class="actions">
+        <a href="/" class="btn blue" style="text-decoration:none;display:inline-block">Dashboard</a>
+        <a href="/login.html" class="btn dark" style="text-decoration:none;display:inline-block">Login</a>
+      </div>
+    </div>
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin-top:0">Connections</h3>
+      <table class="conn" id="connTable">
+        <thead><tr><th>Service</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin-top:0">Towers</h3>
+      <div id="towers"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Recent commands</h3>
+      <pre id="commands" style="background:#020617;padding:12px;border-radius:10px;overflow:auto;font-size:12px">—</pre>
+    </div>
+  </div>
+
+  <script>
+    function cls(ok) { return ok ? 'ok' : 'bad'; }
+
+    async function load() {
+      const res = await fetch('/api/debug/status', { credentials: 'include' });
+      if (res.status === 401) {
+        window.location.href = '/login.html?next=/debug.html';
+        return;
+      }
+      const d = await res.json();
+
+      document.getElementById('metrics').innerHTML = `
+        <div class="card"><div class="muted">Towers</div><h2>${d.server.towerCount}</h2></div>
+        <div class="card"><div class="muted">Online</div><h2 class="ok">${d.server.onlineCount}</h2></div>
+        <div class="card"><div class="muted">Uptime</div><h2>${d.server.uptimeSec}s</h2></div>
+        <div class="card"><div class="muted">MQTT</div><h2 class="${cls(d.connections.mqtt.connected)}">${d.connections.mqtt.connected ? 'OK' : 'OFF'}</h2></div>
+      `;
+
+      const rows = [
+        ['MQTT broker', d.connections.mqtt.connected, d.connections.mqtt.url],
+        ['HTTP API', true, `Port ${d.server.port}`],
+      ];
+      for (const [id, agent] of Object.entries(d.connections.piAgents || {})) {
+        rows.push([`Pi ${id} heartbeat`, agent.ageSec < 90, `last ${agent.ageSec}s ago`]);
+      }
+      document.querySelector('#connTable tbody').innerHTML = rows
+        .map(([name, ok, detail]) => `<tr><td>${name}</td><td class="${cls(ok)}">${ok ? 'OK' : 'FAIL'}</td><td>${detail}</td></tr>`)
+        .join('');
+
+      document.getElementById('towers').innerHTML = d.towers.map((t) => {
+        const c = t.connections;
+        return `<details class="tower-debug" open>
+          <summary>${t.id} — ${t.name} · ${t.online ? '🟢 online' : '🔴 offline'} · ${t.battery?.percent ?? '—'}% · signal ${t.signal?.rssi ?? '—'} dBm</summary>
+          <table class="conn">
+            <tr><td>Telemetry</td><td class="${cls(c.telemetry.ok)}">${c.telemetry.ok ? 'OK' : 'offline'}</td><td>${c.telemetry.lastSeen || 'never'} (${c.telemetry.ageSec ?? '—'}s) · Pi ${c.telemetry.piHost}</td></tr>
+            <tr><td>MQTT path</td><td class="${cls(c.mqtt.ok)}">${c.mqtt.ok ? 'OK' : 'off'}</td><td>${c.mqtt.note}</td></tr>
+            <tr><td>HTTP cmd queue</td><td class="${c.httpCommandQueue.pending ? 'warn' : 'ok'}">${c.httpCommandQueue.pending} pending</td><td>${JSON.stringify(c.httpCommandQueue.commands)}</td></tr>
+          </table>
+          <pre>${JSON.stringify(t, null, 2)}</pre>
+        </details>`;
+      }).join('') || '<p class="muted">No towers registered</p>';
+
+      document.getElementById('commands').textContent = JSON.stringify(d.recentCommands, null, 2);
+    }
+
+    load();
+    setInterval(load, 5000);
+  </script>
+</body>
+</html>
