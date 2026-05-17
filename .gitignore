@@ -18,6 +18,7 @@ Thumbs.db
 
 # Build artifacts (regenerate on Pi or PC)
 pi-agent-upload.zip
+pi-agent-from-pi/**/venv/
 
 # Logs
 *.log

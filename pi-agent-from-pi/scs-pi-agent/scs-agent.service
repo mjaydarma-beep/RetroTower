@@ -1,0 +1,19 @@
+[Unit]
+Description=SCS Remote Tower Agent (Raspberry Pi 4)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/scs-agent.env
+WorkingDirectory=/opt/scs-agent
+ExecStart=/opt/scs-agent/venv/bin/python -m scs_agent.main
+Restart=always
+RestartSec=10
+
+# GPIO access
+SupplementaryGroups=gpio
+
+[Install]
+WantedBy=multi-user.target

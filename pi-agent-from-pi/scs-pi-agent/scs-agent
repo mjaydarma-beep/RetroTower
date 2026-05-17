@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""CLI entry point for SCS tower agent."""
+from scs_agent.main import main
+
+if __name__ == "__main__":
+    main()

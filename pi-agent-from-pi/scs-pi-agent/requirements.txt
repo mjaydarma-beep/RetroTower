@@ -1,0 +1,5 @@
+paho-mqtt>=2.1.0
+requests>=2.32.0
+gpiozero>=2.0.1; platform_machine == "aarch64" or platform_machine == "armv7l"
+# Optional battery monitor (install on Pi if using INA219):
+# adafruit-circuitpython-ina219>=3.4.0
